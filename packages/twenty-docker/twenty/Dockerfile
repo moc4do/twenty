@@ -21,9 +21,9 @@ COPY ./packages/twenty-ui/package.json /app/packages/twenty-ui/
 COPY ./packages/twenty-shared/package.json /app/packages/twenty-shared/
 COPY ./packages/twenty-front/package.json /app/packages/twenty-front/
 
-# Install all dependencies (destravado) e reset do Nx
+# Install all dependencies (sem modo imutável) e reset do Nx
 RUN corepack enable && \
-    yarn install --no-progress && \
+    yarn install && \
     yarn cache clean && \
     npx nx reset
 
