@@ -3,8 +3,8 @@ version: '3.8'
 services:
   server:
     build:
-      context: ../..                                  # root do repo
-      dockerfile: packages/twenty-docker/twenty/Dockerfile
+      context: .
+      dockerfile: Dockerfile
     ports:
       - '3100:3100'
     volumes:
@@ -28,8 +28,8 @@ services:
 
   worker:
     build:
-      context: ../..                                  # root do repo
-      dockerfile: packages/twenty-docker/twenty/Dockerfile
+      context: .
+      dockerfile: Dockerfile
     command: ['yarn', 'worker:prod']
     volumes:
       - 'server-local-data:/app/packages/twenty-server/.local-storage'
