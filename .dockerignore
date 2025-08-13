@@ -2,4 +2,10 @@
 .env
 node_modules
 .nx/cache
+dist
+tmp
+.vscode
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
 packages/twenty-server/.env
