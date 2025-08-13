@@ -3,9 +3,10 @@ FROM node:24-alpine AS common-deps
 
 WORKDIR /app
 
-# Desliga watchers/daemon em builds de CI/Docker
+# CI sem watchers e com Yarn não-imutável (para destravar o build)
 ENV CI=1 \
-    NX_DAEMON=false
+    NX_DAEMON=false \
+    YARN_ENABLE_IMMUTABLE_INSTALLS=false
 
 # Copy only the necessary files for dependency resolution
 COPY ./package.json ./yarn.lock ./.yarnrc.yml ./tsconfig.base.json ./nx.json /app/
@@ -20,8 +21,11 @@ COPY ./packages/twenty-ui/package.json /app/packages/twenty-ui/
 COPY ./packages/twenty-shared/package.json /app/packages/twenty-shared/
 COPY ./packages/twenty-front/package.json /app/packages/twenty-front/
 
-# Install all dependencies
-RUN yarn && yarn cache clean && npx nx reset
+# Install all dependencies (destravado) e reset do Nx
+RUN corepack enable && \
+    yarn install --no-progress && \
+    yarn cache clean && \
+    npx nx reset
 
 
 # Build the back
