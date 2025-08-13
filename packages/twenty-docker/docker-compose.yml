@@ -15,7 +15,7 @@ services:
       SERVER_URL: 'https://twenty.oblah.com'   # troque para o seu domínio final
       REDIS_URL: 'redis://redis:6379'
       STORAGE_TYPE: local
-      APP_SECRET: 'SUBSTITUA_POR_UM_SEGREDO_BEM_ALEATÓRIO'
+      APP_SECRET: 'e6ac299e08ecd1c4873a4a23ddd9b107df528c2410bb8382311deeb7b8504d1c'
     depends_on:
       db:
         condition: service_healthy
@@ -39,7 +39,7 @@ services:
       REDIS_URL: 'redis://redis:6379'
       DISABLE_DB_MIGRATIONS: 'true'
       STORAGE_TYPE: local
-      APP_SECRET: 'MESMO_SEGREDO_DO_SERVER'
+      APP_SECRET: 'e6ac299e08ecd1c4873a4a23ddd9b107df528c2410bb8382311deeb7b8504d1c'
     depends_on:
       db:
         condition: service_healthy
