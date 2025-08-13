@@ -3,6 +3,10 @@ FROM node:24-alpine AS common-deps
 
 WORKDIR /app
 
+# Desliga watchers/daemon em builds de CI/Docker
+ENV CI=1 \
+    NX_DAEMON=false
+
 # Copy only the necessary files for dependency resolution
 COPY ./package.json ./yarn.lock ./.yarnrc.yml ./tsconfig.base.json ./nx.json /app/
 COPY ./.yarn/releases /app/.yarn/releases
@@ -28,9 +32,11 @@ COPY ./packages/twenty-emails /app/packages/twenty-emails
 COPY ./packages/twenty-shared /app/packages/twenty-shared
 COPY ./packages/twenty-server /app/packages/twenty-server
 
-RUN npx nx run twenty-server:build
+# Build server em modo produção, sem watchers/daemon
+RUN npx nx run twenty-server:build --configuration=production --skip-nx-cache
 
 RUN yarn workspaces focus --production twenty-emails twenty-shared twenty-server
+
 
 # Build the front
 FROM common-deps AS twenty-front-build
@@ -40,11 +46,15 @@ ARG REACT_APP_SERVER_BASE_URL
 COPY ./packages/twenty-front /app/packages/twenty-front
 COPY ./packages/twenty-ui /app/packages/twenty-ui
 COPY ./packages/twenty-shared /app/packages/twenty-shared
-RUN npx nx build twenty-front
+
+# Build front em modo produção, sem watchers/daemon
+RUN npx nx build twenty-front --configuration=production --skip-nx-cache
 
 
 # Final stage: Run the application
 FROM node:24-alpine AS twenty
+
+ENV NODE_ENV=production
 
 # Used to run healthcheck in docker
 RUN apk add --no-cache curl jq
