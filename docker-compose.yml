@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  server:
+    build:
+      context: ../..                                  # root do repo
+      dockerfile: packages/twenty-docker/twenty/Dockerfile
+    ports:
+      - '3100:3100'
+    volumes:
+      - 'server-local-data:/app/packages/twenty-server/.local-storage'
+    environment:
+      NODE_PORT: 3100
+      PG_DATABASE_URL: 'postgres://postgres:postgres@db:5432/default'
+      SERVER_URL: 'https://twenty.oblah.com'   # troque para o seu domínio final
+      REDIS_URL: 'redis://redis:6379'
+      STORAGE_TYPE: local
+      APP_SECRET: 'SUBSTITUA_POR_UM_SEGREDO_BEM_ALEATÓRIO'
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:3100/healthz']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: always
+
+  worker:
+    build:
+      context: ../..                                  # root do repo
+      dockerfile: packages/twenty-docker/twenty/Dockerfile
+    command: ['yarn', 'worker:prod']
+    volumes:
+      - 'server-local-data:/app/packages/twenty-server/.local-storage'
+    environment:
+      PG_DATABASE_URL: 'postgres://postgres:postgres@db:5432/default'
+      SERVER_URL: 'https://twenty.oblah.com'
+      REDIS_URL: 'redis://redis:6379'
+      DISABLE_DB_MIGRATIONS: 'true'
+      STORAGE_TYPE: local
+      APP_SECRET: 'MESMO_SEGREDO_DO_SERVER'
+    depends_on:
+      db:
+        condition: service_healthy
+      server:
+        condition: service_healthy
+    restart: always
+
+  db:
+    image: 'postgres:16'
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - 'db-data:/var/lib/postgresql/data'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -h localhost -d postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: always
+
+  redis:
+    image: redis
+    restart: always
+
+volumes:
+  db-data: null
+  server-local-data: null
