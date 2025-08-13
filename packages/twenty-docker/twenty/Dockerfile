@@ -8,6 +8,12 @@ ENV CI=1 \
     NX_DAEMON=false \
     YARN_ENABLE_IMMUTABLE_INSTALLS=false
 
+# Precisamos de taskset e nproc
+RUN apk add --no-cache util-linux coreutils
+
+# Permite ajustar a fração de CPU usada nos passos pesados (padrão 80%)
+ARG CPU_PERCENT=80
+
 # Copy only the necessary files for dependency resolution
 COPY ./package.json ./yarn.lock ./.yarnrc.yml ./tsconfig.base.json ./nx.json /app/
 COPY ./.yarn/releases /app/.yarn/releases
@@ -22,37 +28,54 @@ COPY ./packages/twenty-shared/package.json /app/packages/twenty-shared/
 COPY ./packages/twenty-front/package.json /app/packages/twenty-front/
 
 # Install all dependencies (sem modo imutável) e reset do Nx
-RUN corepack enable && \
-    yarn install && \
-    yarn cache clean && \
-    npx nx reset
+# Usa ~80% dos CPUs: calcula 0-(N*CPU_PERCENT/100 - 1)
+RUN CPU_USE=$(( ( $(nproc) * ${CPU_PERCENT} + 99 ) / 100 )); \
+    [ $CPU_USE -lt 1 ] && CPU_USE=1; \
+    END=$((CPU_USE-1)); \
+    echo ">> yarn install com taskset nos CPUs 0-$END / $(nproc)"; \
+    taskset -c 0-$END /bin/sh -lc 'corepack enable && yarn install && yarn cache clean && npx nx reset'
 
 
 # Build the back
 FROM common-deps AS twenty-server-build
+
+ARG CPU_PERCENT=80
 
 # Copy sourcecode after installing dependences to accelerate subsequents builds
 COPY ./packages/twenty-emails /app/packages/twenty-emails
 COPY ./packages/twenty-shared /app/packages/twenty-shared
 COPY ./packages/twenty-server /app/packages/twenty-server
 
-# Build server em modo produção, sem watchers/daemon
-RUN npx nx run twenty-server:build --configuration=production --skip-nx-cache
+# Build server em modo produção, limitado a ~80% dos CPUs
+RUN CPU_USE=$(( ( $(nproc) * ${CPU_PERCENT} + 99 ) / 100 )); \
+    [ $CPU_USE -lt 1 ] && CPU_USE=1; \
+    END=$((CPU_USE-1)); \
+    echo ">> nx build (server) nos CPUs 0-$END / $(nproc)"; \
+    taskset -c 0-$END npx nx run twenty-server:build --configuration=production --skip-nx-cache
 
-RUN yarn workspaces focus --production twenty-emails twenty-shared twenty-server
+RUN CPU_USE=$(( ( $(nproc) * ${CPU_PERCENT} + 99 ) / 100 )); \
+    [ $CPU_USE -lt 1 ] && CPU_USE=1; \
+    END=$((CPU_USE-1)); \
+    echo ">> yarn workspaces focus nos CPUs 0-$END / $(nproc)"; \
+    taskset -c 0-$END yarn workspaces focus --production twenty-emails twenty-shared twenty-server
 
 
 # Build the front
 FROM common-deps AS twenty-front-build
 
 ARG REACT_APP_SERVER_BASE_URL
+ARG CPU_PERCENT=80
 
 COPY ./packages/twenty-front /app/packages/twenty-front
 COPY ./packages/twenty-ui /app/packages/twenty-ui
 COPY ./packages/twenty-shared /app/packages/twenty-shared
 
-# Build front em modo produção, sem watchers/daemon
-RUN npx nx build twenty-front --configuration=production --skip-nx-cache
+# Build front em modo produção, limitado a ~80% dos CPUs
+RUN CPU_USE=$(( ( $(nproc) * ${CPU_PERCENT} + 99 ) / 100 )); \
+    [ $CPU_USE -lt 1 ] && CPU_USE=1; \
+    END=$((CPU_USE-1)); \
+    echo ">> nx build (front) nos CPUs 0-$END / $(nproc)"; \
+    taskset -c 0-$END npx nx build twenty-front --configuration=production --skip-nx-cache
 
 
 # Final stage: Run the application
