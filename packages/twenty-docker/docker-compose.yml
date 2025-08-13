@@ -4,7 +4,7 @@ services:
   server:
     build:
       context: ../..                                  # root do repo
-      dockerfile: packages/twenty-docker/twenty/Dockerfile
+      dockerfile: twenty/packages/twenty-docker/twenty/Dockerfile
     ports:
       - '3100:3100'
     volumes:
