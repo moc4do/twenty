@@ -3,15 +3,15 @@ FROM node:24-alpine AS common-deps
 
 WORKDIR /app
 
-# CI sem watchers e com Yarn não-imutável (para destravar o build)
+# CI sem watchers e com Yarn não-imutável (opção B)
 ENV CI=1 \
     NX_DAEMON=false \
     YARN_ENABLE_IMMUTABLE_INSTALLS=false
 
-# Precisamos de taskset e nproc
+# taskset (util-linux) e nproc (coreutils)
 RUN apk add --no-cache util-linux coreutils
 
-# Permite ajustar a fração de CPU usada nos passos pesados (padrão 80%)
+# Percentual de CPU a usar nos passos pesados (padrão 80%)
 ARG CPU_PERCENT=80
 
 # Copy only the necessary files for dependency resolution
@@ -28,11 +28,15 @@ COPY ./packages/twenty-shared/package.json /app/packages/twenty-shared/
 COPY ./packages/twenty-front/package.json /app/packages/twenty-front/
 
 # Install all dependencies (sem modo imutável) e reset do Nx
-# Usa ~80% dos CPUs: calcula 0-(N*CPU_PERCENT/100 - 1)
-RUN CPU_USE=$(( ( $(nproc) * ${CPU_PERCENT} + 99 ) / 100 )); \
+# Usa floor: CPUs = floor(nproc * CPU_PERCENT/100), garantindo [1, nproc-1]
+RUN TOTAL=$(nproc); \
+    CPU_USE=$(( TOTAL * ${CPU_PERCENT} / 100 )); \
+    [ $CPU_USE -lt 1 ] && CPU_USE=1; \
+    [ $CPU_USE -ge $TOTAL ] && CPU_USE=$(( TOTAL - 1 )); \
     [ $CPU_USE -lt 1 ] && CPU_USE=1; \
     END=$((CPU_USE-1)); \
-    echo ">> yarn install com taskset nos CPUs 0-$END / $(nproc)"; \
+    echo ">> yarn install com CPUs 0-$END de $TOTAL"; \
+    export UV_THREADPOOL_SIZE=$CPU_USE GOMAXPROCS=$CPU_USE; \
     taskset -c 0-$END /bin/sh -lc 'corepack enable && yarn install && yarn cache clean && npx nx reset'
 
 
@@ -46,17 +50,25 @@ COPY ./packages/twenty-emails /app/packages/twenty-emails
 COPY ./packages/twenty-shared /app/packages/twenty-shared
 COPY ./packages/twenty-server /app/packages/twenty-server
 
-# Build server em modo produção, limitado a ~80% dos CPUs
-RUN CPU_USE=$(( ( $(nproc) * ${CPU_PERCENT} + 99 ) / 100 )); \
+# Build server em modo produção, limitado a ~80% dos CPUs (floor)
+RUN TOTAL=$(nproc); \
+    CPU_USE=$(( TOTAL * ${CPU_PERCENT} / 100 )); \
+    [ $CPU_USE -lt 1 ] && CPU_USE=1; \
+    [ $CPU_USE -ge $TOTAL ] && CPU_USE=$(( TOTAL - 1 )); \
     [ $CPU_USE -lt 1 ] && CPU_USE=1; \
     END=$((CPU_USE-1)); \
-    echo ">> nx build (server) nos CPUs 0-$END / $(nproc)"; \
+    echo ">> nx build (server) com CPUs 0-$END de $TOTAL"; \
+    export UV_THREADPOOL_SIZE=$CPU_USE GOMAXPROCS=$CPU_USE; \
     taskset -c 0-$END npx nx run twenty-server:build --configuration=production --skip-nx-cache
 
-RUN CPU_USE=$(( ( $(nproc) * ${CPU_PERCENT} + 99 ) / 100 )); \
+RUN TOTAL=$(nproc); \
+    CPU_USE=$(( TOTAL * ${CPU_PERCENT} / 100 )); \
+    [ $CPU_USE -lt 1 ] && CPU_USE=1; \
+    [ $CPU_USE -ge $TOTAL ] && CPU_USE=$(( TOTAL - 1 )); \
     [ $CPU_USE -lt 1 ] && CPU_USE=1; \
     END=$((CPU_USE-1)); \
-    echo ">> yarn workspaces focus nos CPUs 0-$END / $(nproc)"; \
+    echo ">> yarn workspaces focus com CPUs 0-$END de $TOTAL"; \
+    export UV_THREADPOOL_SIZE=$CPU_USE GOMAXPROCS=$CPU_USE; \
     taskset -c 0-$END yarn workspaces focus --production twenty-emails twenty-shared twenty-server
 
 
@@ -70,11 +82,15 @@ COPY ./packages/twenty-front /app/packages/twenty-front
 COPY ./packages/twenty-ui /app/packages/twenty-ui
 COPY ./packages/twenty-shared /app/packages/twenty-shared
 
-# Build front em modo produção, limitado a ~80% dos CPUs
-RUN CPU_USE=$(( ( $(nproc) * ${CPU_PERCENT} + 99 ) / 100 )); \
+# Build front em modo produção, limitado a ~80% dos CPUs (floor)
+RUN TOTAL=$(nproc); \
+    CPU_USE=$(( TOTAL * ${CPU_PERCENT} / 100 )); \
+    [ $CPU_USE -lt 1 ] && CPU_USE=1; \
+    [ $CPU_USE -ge $TOTAL ] && CPU_USE=$(( TOTAL - 1 )); \
     [ $CPU_USE -lt 1 ] && CPU_USE=1; \
     END=$((CPU_USE-1)); \
-    echo ">> nx build (front) nos CPUs 0-$END / $(nproc)"; \
+    echo ">> nx build (front) com CPUs 0-$END de $TOTAL"; \
+    export UV_THREADPOOL_SIZE=$CPU_USE GOMAXPROCS=$CPU_USE; \
     taskset -c 0-$END npx nx build twenty-front --configuration=production --skip-nx-cache
 
 
@@ -107,7 +123,7 @@ COPY --chown=1000 --from=twenty-front-build /app/packages/twenty-front/build /ap
 
 # Set metadata and labels
 LABEL org.opencontainers.image.source=https://github.com/twentyhq/twenty
-LABEL org.opencontainers.image.description="This image provides a consistent and reproducible environment for the backend and frontend, ensuring it deploys faster and runs the same way regardless of the deployment environment."
+LABEL org.opencontainers.image.description="This image provides a consistent e reproducible environment for the backend and frontend."
 
 RUN mkdir -p /app/.local-storage /app/packages/twenty-server/.local-storage && \
     chown -R 1000:1000 /app
